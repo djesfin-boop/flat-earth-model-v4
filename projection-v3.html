@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Модель проекции светил - Плоская Земля v3</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2f4a 100%);
+            overflow: hidden;
+            color: #e0e0e0;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #loading-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px 50px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 18px;
+            color: #1a2f4a;
+            z-index: 1000;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel {
+            background: rgba(26, 47, 74, 0.92);
+            border: 1px solid rgba(100, 150, 200, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(100, 150, 200, 0.2);
+            background: rgba(50, 100, 150, 0.15);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .panel-header h2,
+        .panel-header h3 {
+            margin: 0;
+            color: #a8d0ff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .panel-toggle {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: rgba(100, 150, 200, 0.2);
+            color: #a8d0ff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .panel-toggle:hover {
+            background: rgba(100, 150, 200, 0.35);
+            transform: scale(1.05);
+        }
+
+        .panel-content {
+            padding: 16px;
+            max-height: 75vh;
+            overflow-y: auto;
+        }
+
+        .panel.collapsed .panel-content {
+            display: none;
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            min-width: 320px;
+            max-width: 400px;
+            font-size: 13px;
+        }
+
+        #model-type {
+            font-size: 14px;
+            font-weight: 600;
+            color: #64ffda;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(100, 255, 218, 0.1);
+            border-radius: 6px;
+            border-left: 3px solid #64ffda;
+        }
+
+        #info-content > div {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        #controls-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+        }
+
+        .draggable .drag-handle {
+            cursor: move;
+            user-select: none;
+        }
+
+        .control-group {
+            margin-bottom: 16px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #a8d0ff;
+            font-size: 13px;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 6px;
+            accent-color: #64ffda;
+        }
+
+        .control-group input[type="date"],
+        .control-group input[type="time"] {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid rgba(100, 150, 200, 0.3);
+            border-radius: 6px;
+            font-size: 13px;
+            background: rgba(10, 22, 40, 0.6);
+            color: #e0e0e0;
+        }
+
+        .control-section {
+            margin: 20px 0;
+            padding: 12px;
+            background: rgba(50, 100, 150, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid rgba(100, 150, 200, 0.4);
+        }
+
+        .control-section h4 {
+            margin: 0 0 10px 0;
+            color: #64ffda;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: normal;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        .checkbox-group label:hover {
+            background: rgba(100, 150, 200, 0.1);
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 8px;
+            accent-color: #64ffda;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px 16px;
+            margin: 6px 0;
+            background: linear-gradient(135deg, #3a7bd5, #00d2ff);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(58, 123, 213, 0.3);
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(58, 123, 213, 0.5);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .panel-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: rgba(10, 22, 40, 0.4);
+            border-radius: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: rgba(100, 150, 200, 0.4);
+            border-radius: 4px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 150, 200, 0.6);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-status">⏳ Загрузка модели проекции...</div>
+    <div id="canvas-container"></div>
+    
+    <!-- Информационная панель -->
+    <div id="info-panel" class="panel" style="display: none;">
+        <div class="panel-header">
+            <h3>📊 Информация</h3>
+            <button class="panel-toggle" data-panel="info">−</button>
+        </div>
+        <div id="info-content" class="panel-content">
+            <div id="model-type">🔷 Модель: Проекция из центра</div>
+            <div id="time-info"></div>
+            <div id="sun-info"></div>
+            <div id="moon-info"></div>
+            <div id="projection-info"></div>
+        </div>
+    </div>
+    
+    <!-- Панель управления -->
+    <div id="controls-panel" class="panel draggable" style="display: none;">
+        <div class="panel-header drag-handle">
+            <h2>⚙️ Управление</h2>
+            <button class="panel-toggle" data-panel="controls">−</button>
+        </div>
+        <div id="controls-content" class="panel-content">
+            <div class="control-group">
+                <label>📅 Дата:</label>
+                <input type="date" id="date-picker" value="2025-11-23">
+            </div>
+            
+            <div class="control-group">
+                <label>⏰ Время (MSK):</label>
+                <input type="time" id="time-picker" value="21:00">
+            </div>
+            
+            <div class="control-group">
+                <label>⚡ Скорость: <span id="speed-value">1.0x</span></label>
+                <input type="range" id="speed-slider" min="0.1" max="20" value="1" step="0.1">
+            </div>
+            
+            <div class="control-section">
+                <h4>👁️ Видимость объектов</h4>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="show-earth" checked> 🌍 Земля</label>
+                    <label><input type="checkbox" id="show-dome" checked> 🔷 Купол</label>
+                    <label><input type="checkbox" id="show-atmosphere" checked> 💨 Атмосфера</label>
+                    <label><input type="checkbox" id="show-grid" checked> 📐 Координатная сетка</label>
+                    <label><input type="checkbox" id="show-mountain" checked> 🏔️ Магнитная гора</label>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h4>💡 Источники света</h4>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="show-sun-source" checked> ☀️ Источник Солнца</label>
+                    <label><input type="checkbox" id="show-moon-source" checked> 🌙 Источник Луны</label>
+                </div>
+            </div>
+            
+            <div class="control-section">
+                <h4>📽️ Проекции</h4>
+                <div class="checkbox-group">
+                    <label><input type="checkbox" id="show-sun-projection" checked> ☀️ Проекция Солнца</label>
+                    <label><input type="checkbox" id="show-moon-projection" checked> 🌙 Проекция Луны</label>
+                    <label><input type="checkbox" id="show-projection-rays" checked> 📍 Лучи проекции</label>
+                </div>
+            </div>
+            
+            <button id="reset-camera">🔄 Сбросить камеру</button>
+            <button id="toggle-animation">▶️ Запустить анимацию</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // ========================================
+        // КОНФИГУРАЦИЯ
+        // ========================================
+        const CONFIG = {
+            EARTH_RADIUS: 20000,
+            DOME_RADIUS: 20000,
+            DOME_HEIGHT: 5500,
+            SUN_SOURCE_DEPTH: -3000,
+            MOON_SOURCE_DEPTH: -2800,
+            SUN_SOURCE_SIZE: 250,
+            MOON_SOURCE_SIZE: 200,
+            SUN_PROJECTION_SIZE: 32,
+            MOON_PROJECTION_SIZE: 30,
+            GREENWICH_OFFSET: Math.PI,
+            J2000_EPOCH: new Date(Date.UTC(2000, 0, 1, 12, 0, 0)),
+            REFERENCE_NEW_MOON: new Date(Date.UTC(2000, 0, 6, 18, 14, 0)),
+            SYNODIC_MONTH: 29.530588861,
+            SIDEREAL_MONTH: 27.321661,
+            CAMERA_FOV: 60,
+            CAMERA_INITIAL_X: 0,
+            CAMERA_INITIAL_Y: 40000,
+            CAMERA_INITIAL_Z: 40000
+        };
+
+        // ========================================
+        // АСТРОНОМИЧЕСКИЕ РАСЧЁТЫ
+        // ========================================
+        const Astronomy = {
+            calculateSolarDeclination(date) {
+                const daysSinceJ2000 = (date - CONFIG.J2000_EPOCH) / (1000 * 60 * 60 * 24);
+                const meanAnomaly = (357.529 + 0.98560028 * daysSinceJ2000) * (Math.PI / 180);
+                const eclipticLongitude = (280.459 + 0.98564736 * daysSinceJ2000) * (Math.PI / 180);
+                const centerEquation = (1.915 * Math.sin(meanAnomaly) + 0.020 * Math.sin(2 * meanAnomaly)) * (Math.PI / 180);
+                const trueLongitude = eclipticLongitude + centerEquation;
+                const obliquity = 23.439 * (Math.PI / 180);
+                const declination = Math.asin(Math.sin(obliquity) * Math.sin(trueLongitude));
+                return declination * (180 / Math.PI);
+            },
+
+            calculateMoonDeclination(date) {
+                const daysSinceJ2000 = (date - CONFIG.J2000_EPOCH) / (1000 * 60 * 60 * 24);
+                const meanLongitude = (218.316 + 13.176396 * daysSinceJ2000) * (Math.PI / 180);
+                const meanAnomaly = (134.963 + 13.064993 * daysSinceJ2000) * (Math.PI / 180);
+                const latitude = (5.128 * Math.sin(meanAnomaly)) * (Math.PI / 180);
+                const obliquity = 23.439 * (Math.PI / 180);
+                const declination = Math.asin(Math.sin(latitude) * Math.cos(obliquity));
+                return declination * (180 / Math.PI);
+            },
+
+            latitudeToRadius(latitude) {
+                const normalizedLat = (90 - latitude) / 90;
+                return CONFIG.EARTH_RADIUS * normalizedLat * 0.5;
+            },
+
+            calculateMoonAge(date) {
+                const timeDiff = date - CONFIG.REFERENCE_NEW_MOON;
+                const daysSinceNewMoon = timeDiff / (1000 * 60 * 60 * 24);
+                const age = daysSinceNewMoon % CONFIG.SYNODIC_MONTH;
+                return age < 0 ? age + CONFIG.SYNODIC_MONTH : age;
+            },
+
+            calculateSunPosition(date) {
+                const declination = this.calculateSolarDeclination(date);
+                const radius = this.latitudeToRadius(declination);
+                
+                const utcTime = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+                const angle = ((utcTime - 12) / 24) * Math.PI * 2 + CONFIG.GREENWICH_OFFSET;
+                
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const y = CONFIG.SUN_SOURCE_DEPTH;
+                
+                return { x, y, z, declination, radius };
+            },
+
+            calculateMoonPosition(date) {
+                const declination = this.calculateMoonDeclination(date);
+                const radius = this.latitudeToRadius(declination);
+                
+                const daysSinceNewMoon = (date - CONFIG.REFERENCE_NEW_MOON) / (1000 * 60 * 60 * 24);
+                const orbitalAngle = (daysSinceNewMoon / CONFIG.SIDEREAL_MONTH) * Math.PI * 2;
+                const angle = orbitalAngle + CONFIG.GREENWICH_OFFSET;
+                
+                const x = radius * Math.cos(angle);
+                const z = radius * Math.sin(angle);
+                const y = CONFIG.MOON_SOURCE_DEPTH;
+                
+                return { x, y, z, declination, radius };
+            }
+        };
+
+        // ========================================
+        // СЦЕНА И ОБЪЕКТЫ
+        // ========================================
+        let scene, camera, renderer, controls;
+        let earth, dome, sunSource, moonSource, sunProjection, moonProjection;
+        let sunRays, moonRays;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000814);
+            scene.fog = new THREE.Fog(0x000814, 50000, 100000);
+
+            camera = new THREE.PerspectiveCamera(CONFIG.CAMERA_FOV, window.innerWidth / window.innerHeight, 100, 150000);
+            camera.position.set(CONFIG.CAMERA_INITIAL_X, CONFIG.CAMERA_INITIAL_Y, CONFIG.CAMERA_INITIAL_Z);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 100000;
+            controls.minDistance = 5000;
+            controls.maxPolarAngle = Math.PI / 2.1;
+
+            // Освещение
+            const ambient = new THREE.AmbientLight(0x404060, 0.3);
+            scene.add(ambient);
+
+            const hemisphere = new THREE.HemisphereLight(0x87ceeb, 0x1a2f4a, 0.4);
+            scene.add(hemisphere);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createEarth() {
+            const geometry = new THREE.CircleGeometry(CONFIG.EARTH_RADIUS, 256);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x2a4a6a,
+                roughness: 0.8,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+
+            earth = new THREE.Mesh(geometry, material);
+            earth.rotation.x = -Math.PI / 2;
+            earth.receiveShadow = true;
+            scene.add(earth);
+
+            // Координатная сетка
+            const meridianMaterial = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
+            const primeMeridianMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+
+            for (let lon = 0; lon < 360; lon += 15) {
+                const points = [];
+                const angleRad = (lon * Math.PI / 180) + CONFIG.GREENWICH_OFFSET;
+                
+                for (let r = 0; r <= CONFIG.EARTH_RADIUS; r += 500) {
+                    const x = r * Math.cos(angleRad);
+                    const z = r * Math.sin(angleRad);
+                    points.push(new THREE.Vector3(x, 10, z));
+                }
+                
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(lineGeometry, lon === 0 ? primeMeridianMaterial : meridianMaterial);
+                scene.add(line);
+            }
+        }
+
+        function createDome() {
+            const geometry = new THREE.SphereGeometry(CONFIG.DOME_RADIUS, 128, 128, 0, Math.PI * 2, 0, Math.PI / 2);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x1a3d5a,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.DoubleSide,
+                shininess: 100
+            });
+
+            dome = new THREE.Mesh(geometry, material);
+            scene.add(dome);
+        }
+
+        function createLightSources() {
+            // Источник Солнца
+            const sunGeometry = new THREE.SphereGeometry(CONFIG.SUN_SOURCE_SIZE, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, emissive: 0xffff00 });
+            sunSource = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sunSource);
+
+            const sunLight = new THREE.PointLight(0xffffff, 2.0, 60000);
+            sunSource.add(sunLight);
+
+            // Источник Луны
+            const moonGeometry = new THREE.SphereGeometry(CONFIG.MOON_SOURCE_SIZE, 32, 32);
+            const moonMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, emissive: 0xaaaaaa });
+            moonSource = new THREE.Mesh(moonGeometry, moonMaterial);
+            scene.add(moonSource);
+
+            const moonLight = new THREE.PointLight(0xaaaaaa, 0.3, 40000);
+            moonSource.add(moonLight);
+        }
+
+        function createProjections() {
+            // Проекция Солнца
+            const sunProjGeometry = new THREE.SphereGeometry(CONFIG.SUN_PROJECTION_SIZE, 32, 32);
+            const sunProjMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, emissive: 0xffff00 });
+            sunProjection = new THREE.Mesh(sunProjGeometry, sunProjMaterial);
+            scene.add(sunProjection);
+
+            // Проекция Луны
+            const moonProjGeometry = new THREE.SphereGeometry(CONFIG.MOON_PROJECTION_SIZE, 32, 32);
+            const moonProjMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, emissive: 0xcccccc });
+            moonProjection = new THREE.Mesh(moonProjGeometry, moonProjMaterial);
+            scene.add(moonProjection);
+        }
+
+        function createMagneticMountain() {
+            const geometry = new THREE.ConeGeometry(100, 500, 32);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x8b4513,
+                roughness: 0.9,
+                metalness: 0.3,
+                emissive: 0x331100,
+                emissiveIntensity: 0.2
+            });
+
+            const mountain = new THREE.Mesh(geometry, material);
+            mountain.position.y = 250;
+            scene.add(mountain);
+        }
+
+        // ========================================
+        // ОБНОВЛЕНИЯ
+        // ========================================
+        function updatePositions(date) {
+            const sunPos = Astronomy.calculateSunPosition(date);
+            const moonPos = Astronomy.calculateMoonPosition(date);
+
+            sunSource.position.set(sunPos.x, sunPos.y, sunPos.z);
+            moonSource.position.set(moonPos.x, moonPos.y, moonPos.z);
+
+            // Простая проекция: прямое отображение на куполе
+            const sunProjRadius = Math.sqrt(sunPos.x * sunPos.x + sunPos.z * sunPos.z) * 0.9;
+            const sunProjAngle = Math.atan2(sunPos.z, sunPos.x);
+            sunProjection.position.set(
+                sunProjRadius * Math.cos(sunProjAngle),
+                CONFIG.DOME_HEIGHT - 200,
+                sunProjRadius * Math.sin(sunProjAngle)
+            );
+
+            const moonProjRadius = Math.sqrt(moonPos.x * moonPos.x + moonPos.z * moonPos.z) * 0.9;
+            const moonProjAngle = Math.atan2(moonPos.z, moonPos.x);
+            moonProjection.position.set(
+                moonProjRadius * Math.cos(moonProjAngle),
+                CONFIG.DOME_HEIGHT - 200,
+                moonProjRadius * Math.sin(moonProjAngle)
+            );
+
+            updateInfoPanel(date, sunPos, moonPos);
+        }
+
+        function updateInfoPanel(date, sunPos, moonPos) {
+            const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+            const dateStr = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+            const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            const moonAge = Astronomy.calculateMoonAge(date);
+
+            document.getElementById('time-info').innerHTML = `
+                <strong>📅 Дата:</strong> ${dateStr}<br>
+                <strong>⏰ Время:</strong> ${timeStr} MSK
+            `;
+
+            document.getElementById('sun-info').innerHTML = `
+                <strong>☀️ Солнце (источник):</strong><br>
+                Глубина: ${Math.abs(sunPos.y).toFixed(0)} км<br>
+                Орбита: ${sunPos.radius.toFixed(0)} км<br>
+                Деклинация: ${sunPos.declination.toFixed(2)}°
+            `;
+
+            document.getElementById('moon-info').innerHTML = `
+                <strong>🌙 Луна (источник):</strong><br>
+                Глубина: ${Math.abs(moonPos.y).toFixed(0)} км<br>
+                Возраст: ${moonAge.toFixed(1)} дней
+            `;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ========================================
+        // УПРАВЛЕНИЕ
+        // ========================================
+        let isAnimating = false;
+        let animationSpeed = 1;
+        let currentDate = new Date(2025, 10, 23, 21, 0, 0);
+
+        function setupControls() {
+            document.getElementById('date-picker').addEventListener('change', (e) => {
+                const [year, month, day] = e.target.value.split('-').map(Number);
+                currentDate.setFullYear(year);
+                currentDate.setMonth(month - 1);
+                currentDate.setDate(day);
+                updatePositions(currentDate);
+            });
+
+            document.getElementById('time-picker').addEventListener('change', (e) => {
+                const [hours, minutes] = e.target.value.split(':').map(Number);
+                currentDate.setHours(hours);
+                currentDate.setMinutes(minutes);
+                updatePositions(currentDate);
+            });
+
+            document.getElementById('speed-slider').addEventListener('input', (e) => {
+                animationSpeed = parseFloat(e.target.value);
+                document.getElementById('speed-value').textContent = animationSpeed.toFixed(1) + 'x';
+            });
+
+            document.getElementById('reset-camera').addEventListener('click', () => {
+                camera.position.set(CONFIG.CAMERA_INITIAL_X, CONFIG.CAMERA_INITIAL_Y, CONFIG.CAMERA_INITIAL_Z);
+                camera.lookAt(0, 0, 0);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            document.getElementById('toggle-animation').addEventListener('click', () => {
+                isAnimating = !isAnimating;
+                document.getElementById('toggle-animation').textContent = isAnimating ? '⏸️ Остановить' : '▶️ Запустить';
+            });
+
+            // Видимость
+            ['earth', 'dome', 'atmosphere', 'grid', 'mountain', 'sun-source', 'moon-source', 'sun-projection', 'moon-projection'].forEach(id => {
+                const checkbox = document.getElementById(`show-${id}`);
+                if (checkbox) {
+                    checkbox.addEventListener('change', (e) => {
+                        const map = {
+                            'earth': earth,
+                            'dome': dome,
+                            'sun-source': sunSource,
+                            'moon-source': moonSource,
+                            'sun-projection': sunProjection,
+                            'moon-projection': moonProjection
+                        };
+                        if (map[id]) map[id].visible = e.target.checked;
+                    });
+                }
+            });
+
+            // Сворачивание панелей
+            document.querySelectorAll('.panel-toggle').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const panelId = btn.dataset.panel;
+                    const panel = document.getElementById(`${panelId}-panel`);
+                    panel.classList.toggle('collapsed');
+                    btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+                });
+            });
+
+            // Перемещение панели
+            const panel = document.getElementById('controls-panel');
+            const handle = panel.querySelector('.drag-handle');
+            let isDragging = false;
+
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                const rect = panel.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const offsetY = e.clientY - rect.top;
+
+                document.addEventListener('mousemove', (e) => {
+                    if (isDragging) {
+                        panel.style.left = (e.clientX - offsetX) + 'px';
+                        panel.style.top = (e.clientY - offsetY) + 'px';
+                        panel.style.right = 'auto';
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                });
+            });
+        }
+
+        // ========================================
+        // ОСНОВНОЙ ЦИКЛ
+        // ========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isAnimating) {
+                const deltaTime = 120000 * animationSpeed;
+                currentDate = new Date(currentDate.getTime() + deltaTime);
+                updatePositions(currentDate);
+
+                document.getElementById('date-picker').value = 
+                    `${currentDate.getFullYear()}-${(currentDate.getMonth() + 1).toString().padStart(2, '0')}-${currentDate.getDate().toString().padStart(2, '0')}`;
+                document.getElementById('time-picker').value = 
+                    `${currentDate.getHours().toString().padStart(2, '0')}:${currentDate.getMinutes().toString().padStart(2, '0')}`;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // ========================================
+        // ИНИЦИАЛИЗАЦИЯ
+        // ========================================
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                initScene();
+                createEarth();
+                createDome();
+                createMagneticMountain();
+                createLightSources();
+                createProjections();
+                setupControls();
+                updatePositions(currentDate);
+
+                document.getElementById('loading-status').style.display = 'none';
+                document.getElementById('info-panel').style.display = 'block';
+                document.getElementById('controls-panel').style.display = 'block';
+
+                animate();
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+                document.getElementById('loading-status').innerHTML = '❌ Ошибка загрузки. Проверьте консоль.';
+            }
+        });
+    </script>
+</body>
+</html>
